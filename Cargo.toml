@@ -1,0 +1,31 @@
+[package]
+name = "cygshim"
+version = "0.0.0"
+edition = "2024"
+description = "Native Windows shims for Cygwin command-line programs"
+license = "MIT"
+repository = "https://github.com/edemaine/cygshim"
+publish = false
+autobins = false
+
+[dependencies]
+flate2 = "1"
+
+[features]
+cygwin-tex-tests = []
+
+[[bin]]
+name = "git"
+path = "src/bin/git.rs"
+
+[[bin]]
+name = "latexmk"
+path = "src/bin/latexmk.rs"
+
+[[bin]]
+name = "pdflatex"
+path = "src/bin/pdflatex.rs"
+
+[profile.release]
+lto = "thin"
+strip = true
