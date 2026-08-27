@@ -14,6 +14,55 @@ Native applications can therefore discover and launch them normally.
 The shim safely crosses into Cygwin, then runs the corresponding
 Cygwin program from `/usr/bin`.
 
+## Installation
+
+Cygshim requires:
+
+- 64-bit x86 Windows 10 or newer
+- 64-bit Cygwin, including `bash` and `cygpath`
+- The Cygwin packages for each shim being used (`git`, `latexmk`,
+  `texlive-collection-latex`, and related TeX packages as appropriate)
+
+Prebuilt executables are available from the
+[GitHub releases](https://github.com/edemaine/cygshim/releases).
+Download and extract the Windows x86-64 ZIP archive, then move all or
+selected executables to the desired installation directory. For example:
+
+- `%LOCALAPPDATA%\Programs\Cygshim` for one user, without administrator access.
+- `C:\Program Files\Cygshim` for a machine-wide installation,
+  with administrator access.
+
+Do not install the shims over Cygwin's real executables.
+
+For native applications to discover the shims by name, open **System
+Properties → Advanced → Environment Variables** and edit `Path`. Use the user
+variable for a per-user installation or the system variable for a machine-wide
+installation. Add the Cygshim directory before Cygwin's `bin` directory in the
+effective Windows PATH, then restart applications so they inherit the change.
+If Cygwin is on the system PATH and Cygshim is only on the user PATH, their
+relative order may not be controllable from the two separate lists; use the
+same PATH scope or configure the application explicitly.
+
+A Cygwin login shell [normally places `/usr/bin` before inherited Windows PATH
+entries](https://cygwin.com/doc/preview/faq/faq.html#faq.using.path), thereby
+bypassing Cygshim. This is normally what you want inside Cygwin: `git` etc.
+behave normally, without a shim. But if you run a native application from a
+Cygwin shell, that application may consequently find Cygwin's executables
+instead of the shims. Point those applications directly at Cygshim, or launch
+them from the Windows desktop or another native environment.
+
+If you'd rather not change your PATH, you can still use applications that
+support an explicit executable path. For VS Code's built-in Git support:
+
+```json
+{
+  "git.path": "C:\\Program Files\\Cygshim\\git.exe"
+}
+```
+
+For LaTeX Workshop, configure tools so that the `command` is the corresponding
+native shim.
+
 ## Problem
 
 Windows starts a process with one command-line string rather than a POSIX
@@ -155,21 +204,15 @@ the TeX-specific logic rather than complicate the process bridge. `latexmk`
 launches its configured TeX engine from inside Cygwin, so that nested invocation
 does not need or use another native shim.
 
-## Requirements
-
-- 64-bit Windows
-- 64-bit Cygwin, including `bash` and `cygpath`
-- The Cygwin packages for each shim being tested or used (`git`, `latexmk`,
-  `texlive-collection-latex`, and related TeX packages as appropriate)
-- A native Windows Rust toolchain
-
-The last distinction is important. Cygwin's Rust package reports a host such as
-`x86_64-pc-cygwin` and produces executables linked to `cygwin1.dll`; those are
-not suitable as native shims. `rustc -vV` should instead report
-`x86_64-pc-windows-msvc` or `x86_64-pc-windows-gnu`. The standard rustup Windows
-installation provides an appropriate toolchain.
-
 ## Development
+
+Building from source requires a native Windows Rust toolchain,
+as provided by the
+[standard rustup installation for Windows](https://rust-lang.org/tools/install/).
+The command `rustc -vV` should report `x86_64-pc-windows-msvc` or
+`x86_64-pc-windows-gnu`.
+If you see a host such as `x86_64-pc-cygwin`, that Cygwin Rust toolchain will
+produce executables linked to `cygwin1.dll`, which won't work for native shims.
 
 Run development commands from Cygwin through the included `build.sh` helper.
 It selects the native Windows Rust toolchain even when Cygwin's toolchain occurs
@@ -198,6 +241,9 @@ target/release/git.exe
 target/release/latexmk.exe
 target/release/pdflatex.exe
 ```
+
+MSVC builds statically link the C runtime, so these executables do not require
+the Visual C++ Redistributable to be installed separately.
 
 ### Checking everything
 
@@ -258,9 +304,9 @@ Run the Rust linter with:
 Clippy is Rust's standard collection of additional correctness, performance,
 and style checks. `-D warnings` makes any finding fail the command.
 
-## Installing
+### Installing from source
 
-Build and install all three shims for the current user with:
+To build and install all three shims from source for the current user, run:
 
 ```bash
 ./install.sh -u
@@ -284,48 +330,46 @@ creates the destination if necessary, and copies `git.exe`, `latexmk.exe`, and
 `pdflatex.exe`. It does not modify `PATH`. The predefined destinations are:
 
 - `%LOCALAPPDATA%\Programs\Cygshim` for one user, without administrator access.
-- `C:\Program Files\Cygshim` for a machine-wide installation, with administrator
-  access.
+- `C:\Program Files\Cygshim` for a machine-wide installation,
+  with administrator access.
 
 Do not install the shims over Cygwin's real executables. To install only a
 subset, build the project and copy the desired executables manually.
 
-The global installation contains:
+Then [update your PATH or configure the application explicitly](#installation).
 
-```text
-C:\Program Files\Cygshim\git.exe
-C:\Program Files\Cygshim\latexmk.exe
-C:\Program Files\Cygshim\pdflatex.exe
+### Releasing
+
+Update the package version in `Cargo.toml` and `Cargo.lock`, commit it, and push
+the `main` branch. Then build, check, package, tag, and publish the release with:
+
+```bash
+./release.sh --publish
 ```
 
-For native applications to discover the shims by name, open **System
-Properties → Advanced → Environment Variables** and edit `Path`. Use the user
-variable for a per-user installation or the system variable for a machine-wide
-installation. Add the Cygshim directory before Cygwin's `bin` directory in the
-effective Windows PATH, then restart applications so they inherit the change.
-If Cygwin is on the system PATH and Cygshim is only on the user PATH, their
-relative order may not be controllable from the two separate lists; use the
-same PATH scope or configure the application explicitly.
+The script derives the tag from the package version. Publishing requires an
+authenticated [GitHub CLI](https://cli.github.com/), a clean `main` branch
+matching `origin/main`, and a tag and release that do not already exist. It
+repeats those remote checks after building and testing, then uploads a ZIP
+archive and its SHA-256 checksum. GitHub generates the release notes.
 
-A Cygwin login shell [normally places `/usr/bin` before inherited Windows PATH
-entries](https://cygwin.com/doc/preview/faq/faq.html#faq.using.path), thereby
-bypassing Cygshim. This is normally what you want inside Cygwin: `git` etc.
-behave normally, without a shim. But if you run a native application from a
-Cygwin shell, that application may consequently find Cygwin's executables
-instead of the shims. Point those applications directly at Cygshim, or launch
-them from the Windows desktop or another native environment.
+By default, the script exercises the checks, build, and packaging without
+accessing GitHub:
 
-Applications that support an explicit executable path do not need a PATH
-change. For VS Code's built-in Git support:
-
-```json
-{
-  "git.path": "C:\\Program Files\\Cygshim\\git.exe"
-}
+```bash
+./release.sh
 ```
 
-For LaTeX Workshop, define tools whose `command` is the corresponding native
-shim. The ordinary LaTeX arguments can then be listed directly.
+Rehearse the complete release, including its read-only GitHub and repository
+checks, without publishing anything with:
+
+```bash
+./release.sh --dry-run
+```
+
+`--dry-run` takes precedence if combined with `--publish`.
+
+Assets are left in `target/release-assets` for inspection.
 
 ## Finding Cygwin
 
