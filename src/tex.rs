@@ -7,7 +7,7 @@ use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{self, IsTerminal, Read, Write};
-use std::os::windows::ffi::OsStrExt;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -20,9 +20,10 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const MOVEFILE_REPLACE_EXISTING: u32 = 0x0000_0001;
 const MOVEFILE_WRITE_THROUGH: u32 = 0x0000_0008;
 
-// Win32 supplies replace-existing semantics that `fs::rename` lacks on Windows.
+// Win32 supplies short-name expansion and replace-existing rename semantics.
 #[link(name = "Kernel32")]
 unsafe extern "system" {
+    fn GetLongPathNameW(short: *const u16, long: *mut u16, capacity: u32) -> u32;
     fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
 }
 
@@ -64,7 +65,12 @@ pub fn run(program: &str) -> ExitCode {
 
 /// Supervises redirected streams and post-processes artifacts around one run.
 fn run_inner(program: &str) -> io::Result<u8> {
-    let args = env::args_os().skip(1).collect::<Vec<_>>();
+    // TeX treats a tilde as syntax, so expand resolvable 8.3 aliases such as
+    // RUNNER~1 before path conversion while preserving nonexistent paths.
+    let args = env::args_os()
+        .skip(1)
+        .map(expand_tex_path_argument)
+        .collect::<Vec<_>>();
     let invocation = TexInvocation::parse(&args)?;
     // Snapshot before spawning so only log and SyncTeX files changed by this
     // invocation are rewritten.
@@ -804,6 +810,51 @@ fn option_path_value(argument: &str) -> Option<&str> {
     .find_map(|prefix| argument.strip_prefix(prefix))
 }
 
+/// Expands existing absolute path arguments from Windows short to long form.
+fn expand_tex_path_argument(argument: OsString) -> OsString {
+    let text = argument.to_string_lossy();
+    if let Some(value) = option_path_value(&text) {
+        let prefix_length = text.len() - value.len();
+        if let Some(path) = long_path_name(Path::new(value)) {
+            let mut expanded = OsString::from(&text[..prefix_length]);
+            expanded.push(path);
+            return expanded;
+        }
+        return argument;
+    }
+    if text.starts_with('-') {
+        return argument;
+    }
+    long_path_name(Path::new(argument.as_os_str()))
+        .map(PathBuf::into_os_string)
+        .unwrap_or(argument)
+}
+
+/// Uses Windows filesystem metadata to expand every resolvable short component.
+fn long_path_name(path: &Path) -> Option<PathBuf> {
+    if !path.is_absolute() {
+        return None;
+    }
+    let input = wide_string(path.as_os_str());
+    let mut output = vec![0; input.len()];
+    loop {
+        let capacity = u32::try_from(output.len()).ok()?;
+        // SAFETY: The input is NUL-terminated, and output describes a writable
+        // buffer of exactly `capacity` UTF-16 code units.
+        let length = unsafe { GetLongPathNameW(input.as_ptr(), output.as_mut_ptr(), capacity) };
+        if length == 0 {
+            return None;
+        }
+        let length = length as usize;
+        if length < output.len() {
+            output.truncate(length);
+            return Some(PathBuf::from(OsString::from_wide(&output)));
+        }
+        // A too-small result includes space for the terminating NUL.
+        output.resize(length, 0);
+    }
+}
+
 /// Removes extended-length prefixes unsupported by cygpath and normalizes slashes.
 fn normalize_windows_path(path: &str) -> String {
     let path = if let Some(path) = path.strip_prefix(r"\\?\UNC\") {
@@ -915,5 +966,15 @@ mod tests {
             b"C:/a.tex) after\n"
         );
         assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn expands_existing_short_path_options() {
+        let short_path = Path::new(r"C:\PROGRA~1");
+        if !short_path.exists() {
+            return;
+        }
+        let expanded = expand_tex_path_argument(OsString::from(r"-outdir=C:\PROGRA~1"));
+        assert!(!expanded.to_string_lossy().contains('~'));
     }
 }

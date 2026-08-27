@@ -118,6 +118,8 @@ The TeX shims:
 
 - Convert absolute Windows source-file and output-directory arguments with
   `cygpath`.
+- Expand resolvable Windows 8.3 short-name aliases before conversion, preventing
+  alias tildes such as `RUNNER~1` from being interpreted as TeX syntax.
 - Run `/usr/bin/latexmk` or `/usr/bin/pdflatex` explicitly.
 - When stdout or stderr is redirected, supervise it in Rust and rewrite known
   invocation paths plus unambiguous `/path:line:` diagnostics to mixed-form
@@ -334,6 +336,11 @@ forwarded to the wrapped program.
 - TeX's unstructured file-open chatter may retain an unknown POSIX path in live
   output. Generated SyncTeX data is handled structurally, and `.log` coverage is
   broader when recorder data is available.
+- TeX and Latexmk impose filename restrictions. For example,
+  [Latexmk rejects filenames](https://latex.us/support/latexmk/latexmk.txt)
+  containing `$`, `%`, `\`, `~`, a leading `&`, or unbalanced double quotes.
+  Cygshim expands resolvable 8.3 aliases containing `~`, but cannot make a
+  literal unsupported filename valid.
 - Cygwin POSIX-only paths outside mounted Windows filesystems remain POSIX paths;
   there may be no meaningful native Windows path to report.
 

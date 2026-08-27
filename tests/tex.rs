@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 struct TempDirectory(PathBuf);
 
@@ -52,11 +52,7 @@ fn pdflatex_rewrites_synctex_without_enabling_recorder() {
         .arg(&source)
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert_success(&output);
 
     let base = output_directory.join("document name (draft)");
     assert!(!base.with_extension("fls").exists());
@@ -83,11 +79,7 @@ fn latexmk_uses_its_recorder_output_to_rewrite_log_paths() {
         .arg(&source)
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert_success(&output);
 
     let base = output_directory.join("document name (draft)");
     assert!(base.with_extension("fls").exists());
@@ -106,9 +98,18 @@ fn path_option(prefix: &str, path: &Path) -> OsString {
     option
 }
 
+fn assert_success(output: &Output) {
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn assert_native_source_path(contents: &[u8], source: &Path) {
     let contents = String::from_utf8_lossy(contents);
-    let source = source.to_string_lossy().replace('\\', "/");
+    let source = canonical_native_path(source);
     assert!(contents.contains(&source), "missing native path {source}");
     assert!(!contents.contains("/cygdrive/"));
 }
@@ -126,12 +127,24 @@ fn assert_native_synctex(path: &Path, source: &Path) {
                 .map(|(_, path)| path)
         })
         .collect::<Vec<_>>();
-    let source = source.to_string_lossy().replace('\\', "/");
+    let source = canonical_native_path(source);
     assert!(
         input_paths.contains(&source.as_str()),
         "SyncTeX is missing native source path {source}"
     );
     for path in input_paths {
         assert!(!path.starts_with('/'), "SyncTeX retained POSIX path {path}");
+    }
+}
+
+fn canonical_native_path(path: &Path) -> String {
+    let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let path = path.to_string_lossy();
+    if let Some(path) = path.strip_prefix(r"\\?\UNC\") {
+        format!("//{}", path.replace('\\', "/"))
+    } else {
+        path.strip_prefix(r"\\?\")
+            .unwrap_or(&path)
+            .replace('\\', "/")
     }
 }
