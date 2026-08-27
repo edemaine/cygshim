@@ -15,43 +15,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Restore Cygwin
-        id: cygwin-cache
+      - name: Restore Cygwin package cache
         uses: actions/cache@v5
         with:
-          path: C:\cygwin64
-          # Increment v1 to refresh the installed Cygwin package versions.
-          key: cygwin-v1-${{ runner.os }}-${{ runner.arch }}
+          path: D:\cygwin-packages
+          # Increment v1 to refresh versions or change the requested packages.
+          key: cygwin-packages-v1-${{ runner.os }}-${{ runner.arch }}
 
       - name: Install Cygwin tools
-        if: steps.cygwin-cache.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $setup = "$env:RUNNER_TEMP\setup-x86_64.exe"
-          Invoke-WebRequest https://cygwin.com/setup-x86_64.exe -OutFile $setup
-          $arguments = @(
-            "--quiet-mode"
-            "--no-admin"
-            "--no-shortcuts"
-            "--only-site"
-            "--root", "C:\cygwin64"
-            "--local-package-dir", "$env:RUNNER_TEMP\cygwin-packages"
-            "--site", "https://mirrors.kernel.org/sourceware/cygwin/"
-            "--packages", "git,texlive-collection-binextra,texlive-collection-latex"
-          )
-          $process = Start-Process $setup -ArgumentList $arguments -Wait -PassThru
-          if ($process.ExitCode -ne 0) {
-            throw "Cygwin setup exited with code $($process.ExitCode)"
-          }
+        id: cygwin
+        uses: cygwin/cygwin-install-action@v6
+        with:
+          work-vol: 'D:'
+          packages: |
+            git
+            texlive-collection-binextra
+            texlive-collection-latex
 
       - name: Build release executables
         shell: pwsh
         run: |
-          $env:PATH = "C:\cygwin64\bin;$env:PATH"
-          C:\cygwin64\bin\bash.exe --noprofile --norc ./build.sh
+          & "${{ steps.cygwin.outputs.root }}\bin\bash.exe" --noprofile --norc ./build.sh
 
       - name: Check
         shell: pwsh
         run: |
-          $env:PATH = "C:\cygwin64\bin;$env:PATH"
-          C:\cygwin64\bin\bash.exe --noprofile --norc ./check.sh
+          & "${{ steps.cygwin.outputs.root }}\bin\bash.exe" --noprofile --norc ./check.sh
