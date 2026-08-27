@@ -36,7 +36,7 @@ impl Drop for TempDirectory {
 
 #[test]
 #[cfg_attr(
-    not(feature = "cygwin-tex-tests"),
+    not(feature = "cygwin-pdflatex-test"),
     ignore = "requires Cygwin pdflatex and TeX packages"
 )]
 fn pdflatex_rewrites_synctex_without_enabling_recorder() {
@@ -62,12 +62,12 @@ fn pdflatex_rewrites_synctex_without_enabling_recorder() {
     assert!(!base.with_extension("fls").exists());
     assert_native_source_path(&output.stdout, &source);
     assert_native_source_path(&fs::read(base.with_extension("log")).unwrap(), &source);
-    assert_native_synctex(&base.with_extension("synctex.gz"));
+    assert_native_synctex(&base.with_extension("synctex.gz"), &source);
 }
 
 #[test]
 #[cfg_attr(
-    not(feature = "cygwin-tex-tests"),
+    not(feature = "cygwin-latexmk-test"),
     ignore = "requires Cygwin latexmk and TeX packages"
 )]
 fn latexmk_uses_its_recorder_output_to_rewrite_log_paths() {
@@ -97,7 +97,7 @@ fn latexmk_uses_its_recorder_output_to_rewrite_log_paths() {
     for prefix in [b"(/usr/".as_slice(), b"</usr/", b"{/var/"] {
         assert!(!log.windows(prefix.len()).any(|window| window == prefix));
     }
-    assert_native_synctex(&base.with_extension("synctex.gz"));
+    assert_native_synctex(&base.with_extension("synctex.gz"), &source);
 }
 
 fn path_option(prefix: &str, path: &Path) -> OsString {
@@ -113,16 +113,24 @@ fn assert_native_source_path(contents: &[u8], source: &Path) {
     assert!(!contents.contains("/cygdrive/"));
 }
 
-fn assert_native_synctex(path: &Path) {
+fn assert_native_synctex(path: &Path, source: &Path) {
     let mut contents = String::new();
     GzDecoder::new(File::open(path).unwrap())
         .read_to_string(&mut contents)
         .unwrap();
-    let input_paths = contents.lines().filter_map(|line| {
-        line.strip_prefix("Input:")
-            .and_then(|line| line.split_once(':'))
-            .map(|(_, path)| path)
-    });
+    let input_paths = contents
+        .lines()
+        .filter_map(|line| {
+            line.strip_prefix("Input:")
+                .and_then(|line| line.split_once(':'))
+                .map(|(_, path)| path)
+        })
+        .collect::<Vec<_>>();
+    let source = source.to_string_lossy().replace('\\', "/");
+    assert!(
+        input_paths.contains(&source.as_str()),
+        "SyncTeX is missing native source path {source}"
+    );
     for path in input_paths {
         assert!(!path.starts_with('/'), "SyncTeX retained POSIX path {path}");
     }

@@ -84,13 +84,9 @@ described below when a stream is redirected. When none of the standard streams
 is attached to a terminal, the shim asks Windows not to create a console window,
 avoiding flashes when GUI applications run frequent commands.
 
-The transport lives in a shared source module within this package. Each shim is
-a separate Rust binary target with its own tool-specific logic; there is no
-separately published shared crate and no runtime shell-script installation.
-
-A shared bridge transports process data, including arguments as described above.
-Each shim then does limited further conversions appropriate to its program,
-including path translation.
+The transport lives in a shared bridge source module within this package. Each
+shim is a separate Rust binary target that uses the bridge and adds only its
+tool-specific path conversion and output handling.
 
 ### Git
 
@@ -161,7 +157,7 @@ does not need or use another native shim.
 
 - 64-bit Windows
 - 64-bit Cygwin, including `bash` and `cygpath`
-- The Cygwin packages for the shim being built and used (`git`, `latexmk`,
+- The Cygwin packages for each shim being tested or used (`git`, `latexmk`,
   `texlive-collection-latex`, and related TeX packages as appropriate)
 - A native Windows Rust toolchain
 
@@ -171,28 +167,27 @@ not suitable as native shims. `rustc -vV` should instead report
 `x86_64-pc-windows-msvc` or `x86_64-pc-windows-gnu`. The standard rustup Windows
 installation provides an appropriate toolchain.
 
-## Building
+## Development
 
-If you just have a native Windows Rust toolchain, you can build via
+Run development commands from Cygwin through the included `build.sh` helper.
+It selects the native Windows Rust toolchain even when Cygwin's toolchain occurs
+first on `PATH`, and removes an incompatible inherited Cargo jobserver setting.
 
-```powershell
-cargo build --release
-```
+### Building
 
-If you also have a Cygwin Rust toolchain, use the included build helper:
+Build optimized standalone executables with:
 
 ```bash
 ./build.sh
 ```
 
-With no arguments, `build.sh` runs `cargo build --release`. Arguments replace
-that default Cargo command, so the same helper can run tests or clean artifacts.
-It puts the native rustup directory first on `PATH` and removes
-`CARGO_MAKEFLAGS`. Invoking native `cargo.exe` by its full path is not sufficient
-when Cygwin's `rustc` still occurs first on `PATH`: Cargo would then compile for
-`x86_64-pc-cygwin`, where `std::os::windows` is unavailable. `CARGO_MAKEFLAGS`
-can likewise contain a jobserver representation that is meaningful only to the
-toolchain that created it.
+With no arguments, this is `cargo build --release` in Rust terminology.
+Arguments replace that default Cargo command, so `build.sh` can run any Cargo
+development command. Invoking native `cargo.exe` by its full path is not
+sufficient when Cygwin's `rustc` still occurs first on `PATH`: Cargo would then
+compile for `x86_64-pc-cygwin`, where `std::os::windows` is unavailable.
+`CARGO_MAKEFLAGS` can likewise contain a jobserver representation that is
+meaningful only to the toolchain that created it.
 
 The standalone executables are written to:
 
@@ -201,6 +196,54 @@ target/release/git.exe
 target/release/latexmk.exe
 target/release/pdflatex.exe
 ```
+
+### Testing
+
+Run all unit and integration tests with:
+
+```bash
+./build.sh test --all-targets
+```
+
+The Cargo equivalent is `cargo test --all-targets`, except for the automatic
+TeX test detection described below.
+
+The transport tests cover empty arguments, whitespace, braces, brackets, glob
+characters, literal quotes, backslash-quote sequences, embedded newlines, and
+extended-length Windows paths. An end-to-end Git test initializes a repository
+whose path contains brackets and braces, verifies native path output, and
+repeats the argument checks with an inherited `CYGWIN=noglob`.
+
+When `build.sh` runs a Cargo `test` command, it detects `/usr/bin/pdflatex` and
+`/usr/bin/latexmk` independently and enables each corresponding end-to-end test
+that can run. The unavailable tests remain ignored. They cover direct
+`pdflatex` without a recorder and Latexmk with its default recorder, using
+source and output paths containing spaces and parentheses. With both tools
+installed, the direct Cargo equivalent is:
+
+```text
+cargo test --features cygwin-tex-tests --test tex
+```
+
+### Formatting and linting
+
+Format the Rust sources with:
+
+```bash
+./build.sh fmt
+```
+
+Use `./build.sh fmt -- --check` to check formatting without changing files. The
+Cargo equivalents are `cargo fmt` and `cargo fmt -- --check`.
+
+Run the Rust linter with:
+
+```bash
+./build.sh clippy --all-targets --all-features -- -D warnings
+```
+
+Clippy is Rust's standard collection of additional correctness, performance,
+and style checks. `-D warnings` makes any finding fail the command.
 
 ## Installing
 
@@ -282,35 +325,6 @@ forwarded to the wrapped program.
   broader when recorder data is available.
 - Cygwin POSIX-only paths outside mounted Windows filesystems remain POSIX paths;
   there may be no meaningful native Windows path to report.
-
-## Testing
-
-Run tests with the native Windows Rust environment configured under
-[**Building**](#building):
-
-```powershell
-./build.sh test --all-targets
-```
-
-If you just have a native Windows Rust toolchain, this is roughly equivalent to
-`cargo test --all-targets`, but note LaTeX tests discussed below.
-
-The transport tests cover empty arguments, whitespace, braces, brackets, glob
-characters, literal quotes, backslash-quote sequences, embedded newlines, and
-extended-length Windows paths. An end-to-end Git test initializes a repository
-whose path contains brackets and braces, verifies native path output, and
-repeats the argument checks with an inherited `CYGWIN=noglob`.
-
-When `build.sh` runs a Cargo `test` command, it detects `/usr/bin/pdflatex` and
-`/usr/bin/latexmk`. If both are installed, it automatically enables the
-end-to-end TeX tests; otherwise, they remain ignored. They cover direct
-`pdflatex` without a recorder and Latexmk with its default recorder, using
-source and output paths containing spaces and parentheses. From PowerShell,
-enable them explicitly when the Cygwin TeX packages are installed:
-
-```powershell
-cargo test --features cygwin-tex-tests --test tex
-```
 
 ## Prior work
 

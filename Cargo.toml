@@ -12,7 +12,9 @@ autobins = false
 flate2 = "1"
 
 [features]
-cygwin-tex-tests = []
+cygwin-latexmk-test = []
+cygwin-pdflatex-test = []
+cygwin-tex-tests = ["cygwin-latexmk-test", "cygwin-pdflatex-test"]
 
 [[bin]]
 name = "git"

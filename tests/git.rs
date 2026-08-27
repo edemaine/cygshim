@@ -60,6 +60,8 @@ fn git_preserves_arguments_and_reports_native_repository_paths() {
             "*.glob",
         ])
         .env("CYGWIN", "winsymlinks:native noglob")
+        // A parent shim's stale next argument must not extend this invocation.
+        .env("CYGSHIM_ARG_7", "stale")
         .output()
         .unwrap();
     assert!(quoted.status.success());

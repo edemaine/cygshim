@@ -19,9 +19,21 @@ if (( $# == 0 )); then
   set -- build --release
 fi
 
-# Run the external TeX tests automatically when both wrapped tools are present.
-if [[ ${1-} == test && -x /usr/bin/pdflatex && -x /usr/bin/latexmk ]]; then
-  set -- test --features cygwin-tex-tests "${@:2}"
-fi
+# Run each external TeX test automatically when its wrapped tool is present.
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [[ ${args[i]} != test ]]; then
+    continue
+  fi
 
-exec "$native_cargo" "$@"
+  features=()
+  [[ -x /usr/bin/latexmk ]] && features+=(cygwin-latexmk-test)
+  [[ -x /usr/bin/pdflatex ]] && features+=(cygwin-pdflatex-test)
+  if (( ${#features[@]} > 0 )); then
+    feature_list=$(IFS=,; printf '%s' "${features[*]}")
+    args=("${args[@]:0:i+1}" --features "$feature_list" "${args[@]:i+1}")
+  fi
+  break
+done
+
+exec "$native_cargo" "${args[@]}"

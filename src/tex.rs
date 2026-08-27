@@ -573,11 +573,17 @@ fn replace_file(path: &Path, contents: &[u8]) -> io::Result<()> {
             .open(&candidate)
         {
             Ok(mut file) => {
-                if let Err(error) = file.write_all(contents).and_then(|()| file.flush()) {
+                let write_result = file.write_all(contents).and_then(|()| file.flush());
+                // Windows cannot remove an open file created without delete sharing.
+                drop(file);
+                if let Err(error) = write_result {
                     let _ = fs::remove_file(&candidate);
                     return Err(error);
                 }
-                fs::set_permissions(&candidate, metadata.permissions())?;
+                if let Err(error) = fs::set_permissions(&candidate, metadata.permissions()) {
+                    let _ = fs::remove_file(&candidate);
+                    return Err(error);
+                }
                 break candidate;
             }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => attempt += 1,
