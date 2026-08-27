@@ -207,8 +207,8 @@ Run the same complete check as continuous integration with:
 ./check.sh
 ```
 
-This checks formatting, runs Clippy with warnings denied, and runs all available
-tests.
+This checks Rust formatting and shell-script syntax, runs Clippy with warnings
+denied, and runs all available tests.
 
 ### Testing
 
@@ -260,15 +260,37 @@ and style checks. `-D warnings` makes any finding fail the command.
 
 ## Installing
 
-Copy the desired executables to a dedicated directory.
-(Do not copy the shims over Cygwin's real executables.)
-Suitable locations are:
+Build and install all three shims for the current user with:
+
+```bash
+./install.sh -u
+```
+
+For a machine-wide installation, run an elevated Cygwin shell and use:
+
+```bash
+./install.sh -g
+```
+
+You can instead give a Windows or Cygwin directory explicitly:
+
+```bash
+./install.sh 'D:\Tools\Cygshim'
+./install.sh /cygdrive/d/Tools/Cygshim
+```
+
+With no arguments, `install.sh` displays its usage. It runs the release build,
+creates the destination if necessary, and copies `git.exe`, `latexmk.exe`, and
+`pdflatex.exe`. It does not modify `PATH`. The predefined destinations are:
 
 - `%LOCALAPPDATA%\Programs\Cygshim` for one user, without administrator access.
 - `C:\Program Files\Cygshim` for a machine-wide installation, with administrator
   access.
 
-For example:
+Do not install the shims over Cygwin's real executables. To install only a
+subset, build the project and copy the desired executables manually.
+
+The global installation contains:
 
 ```text
 C:\Program Files\Cygshim\git.exe
