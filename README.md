@@ -208,7 +208,7 @@ Run the same complete check as continuous integration with:
 ```
 
 This checks Rust formatting and shell-script syntax, runs Clippy with warnings
-denied, and runs all available tests.
+denied, and runs all tests, including both Cygwin TeX integrations.
 
 ### Testing
 

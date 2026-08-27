@@ -44,6 +44,12 @@ jobs:
             throw "Cygwin setup exited with code $($process.ExitCode)"
           }
 
+      - name: Build release executables
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\cygwin64\bin;$env:PATH"
+          C:\cygwin64\bin\bash.exe --noprofile --norc ./build.sh
+
       - name: Check
         shell: pwsh
         run: |

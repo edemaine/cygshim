@@ -11,4 +11,4 @@ done
 
 ./build.sh fmt -- --check
 ./build.sh clippy --all-targets --all-features -- -D warnings
-./build.sh test --all-targets
+./build.sh test --all-targets --features cygwin-tex-tests
