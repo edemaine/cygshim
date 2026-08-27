@@ -15,7 +15,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Restore Cygwin
+        id: cygwin-cache
+        uses: actions/cache@v5
+        with:
+          path: C:\cygwin64
+          # Increment v1 to refresh the installed Cygwin package versions.
+          key: cygwin-v1-${{ runner.os }}-${{ runner.arch }}
+
       - name: Install Cygwin tools
+        if: steps.cygwin-cache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           $setup = "$env:RUNNER_TEMP\setup-x86_64.exe"
