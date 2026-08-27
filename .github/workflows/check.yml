@@ -1,0 +1,42 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Cygwin tools
+        shell: pwsh
+        run: |
+          $setup = "$env:RUNNER_TEMP\setup-x86_64.exe"
+          Invoke-WebRequest https://cygwin.com/setup-x86_64.exe -OutFile $setup
+          $arguments = @(
+            "--quiet-mode"
+            "--no-admin"
+            "--no-shortcuts"
+            "--only-site"
+            "--root", "C:\cygwin64"
+            "--local-package-dir", "$env:RUNNER_TEMP\cygwin-packages"
+            "--site", "https://mirrors.kernel.org/sourceware/cygwin/"
+            "--packages", "git,texlive-collection-binextra,texlive-collection-latex"
+          )
+          $process = Start-Process $setup -ArgumentList $arguments -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Cygwin setup exited with code $($process.ExitCode)"
+          }
+
+      - name: Check
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\cygwin64\bin;$env:PATH"
+          C:\cygwin64\bin\bash.exe --noprofile --norc ./check.sh

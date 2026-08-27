@@ -197,6 +197,17 @@ target/release/latexmk.exe
 target/release/pdflatex.exe
 ```
 
+### Checking everything
+
+Run the same complete check as continuous integration with:
+
+```bash
+./check.sh
+```
+
+This checks formatting, runs Clippy with warnings denied, and runs all available
+tests.
+
 ### Testing
 
 Run all unit and integration tests with:
