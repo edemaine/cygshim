@@ -243,6 +243,10 @@ mod tests {
             OsString::from("*.glob"),
             OsString::from("literal \"quote\""),
             OsString::from("backslash\\\"quote"),
+            OsString::from("literal $(printf substituted) value"),
+            OsString::from("literal `printf substituted` value"),
+            OsString::from("O'Brien"),
+            OsString::from(r"literal\value"),
             OsString::from("line one\nline two"),
         ];
         let script = r#"printf '%s\0' "${cygshim_args[@]}""#;
